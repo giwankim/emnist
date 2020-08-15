@@ -66,10 +66,10 @@ class SpinalVGG(nn.Module):
     """
     def two_conv_pool(self, in_channels, f1, f2):
         s = nn.Sequential(
-            nn.Conv2d(in_channels, f1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, f1, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(f1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(f1, f2, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(f1, f2, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(f2),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),
@@ -85,13 +85,13 @@ class SpinalVGG(nn.Module):
     
     def three_conv_pool(self,in_channels, f1, f2, f3):
         s = nn.Sequential(
-            nn.Conv2d(in_channels, f1, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(in_channels, f1, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(f1),
             nn.ReLU(inplace=True),
-            nn.Conv2d(f1, f2, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(f1, f2, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(f2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(f2, f3, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(f2, f3, kernel_size=3, stride=1, padding=1, bias=False),
             nn.BatchNorm2d(f3),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2, stride=2),

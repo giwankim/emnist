@@ -1,6 +1,8 @@
 import torch
 import torch.nn.functional as F
 
+import config
+
 
 def loss_fn(outputs, targets):
     return F.cross_entropy(outputs, targets)
@@ -66,3 +68,16 @@ def infer(data_loader, model, device):
         final_outputs.extend(outputs)
 
     return final_outputs
+
+
+def inferTTA(df, model, device, augs, n_tta=4):
+    test_dataset = dataset.EMNISTTestDataset(df, augs)
+
+    preds_tta = np.zeros(len(df), 10)
+    for _ in range(n_tta):
+        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.TEST_BATCH_SIZE)
+        preds = infer(test_loader, model, device)
+        preds = np.array(preds)
+        preds_tta += preds
+
+    return preds_tta

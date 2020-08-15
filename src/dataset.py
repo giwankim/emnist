@@ -1,6 +1,6 @@
 import numpy as np
 
-import albumentations
+import albumentations as A
 
 import torch
 
@@ -15,8 +15,8 @@ class EMNISTDataset(torch.utils.data.Dataset):
         self.letters = df.letter.map(config.LETTER_TO_INDEX).values
 
         if augs is None:
-            self.augs = albumentations.Compose([
-                albumentations.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
+            self.augs = A.Compose([
+                A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
             ])
         else:
             self.augs = augs
@@ -26,9 +26,6 @@ class EMNISTDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, item):
         image = self.images[item]
-
-        # image = np.where(image >= 150, image, 0)
-
         image = image.astype(np.uint8)
         image = image.reshape(28, 28, 1)
 
@@ -50,11 +47,14 @@ class EMNISTDataset(torch.utils.data.Dataset):
 
 
 class EMNISTTestDataset(torch.utils.data.Dataset):
-    def __init__(self, df):
+    def __init__(self, df, augs=None):
         self.images = df[config.PIXEL_COLS].values
-        self.augs = albumentations.Compose([
-            albumentations.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
-        ])
+        if augs is None:
+            self.augs = A.Compose([
+                A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
+            ])
+        else:
+            self.augs = augs
 
     def __len__(self):
         return len(self.images)
