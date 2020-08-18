@@ -1,6 +1,6 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
-
 import config
 
 
@@ -8,76 +8,64 @@ def loss_fn(outputs, targets):
     return F.cross_entropy(outputs, targets)
 
 
-def train(data_loader, model, optimizer, device, scheduler=None):
+def train(data_loader, model, optimizer, device, scheduler=None, scaler=None):
+    "Runs through an epoch of model training"
     model.train()
 
     for data in data_loader:
-        inputs = data["image"]
-        digits = data["digit"]
-        letters = data["letter"]
-
-        inputs = inputs.to(device)
-        digits = digits.to(device)
-        letters = letters.to(device)
-
         optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = loss_fn(outputs, digits)
-        loss.backward()
 
-        # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        with torch.cuda.amp.autocast():
+            inputs = data["image"].to(device)
+            digits = data["digit"].to(device)
+            outputs = model(inputs)
+            loss = loss_fn(outputs, digits)
 
-        optimizer.step()
+        if scaler is not None:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.CLIP_GRAD)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            # Gradient clipping
+            torch.nn.utils.clip_grad_norm_(model.parameters(), config.CLIP_GRAD)
+            optimizer.step()
 
         if scheduler is not None:
             scheduler.step()
 
 
-def evaluate(data_loader, model, device):
-    model.eval()
-
+def evaluate(data_loader, model, device, target=True):
+    "Run evaluation loop"
     final_outputs = []
     final_targets = []
 
-    with torch.no_grad():
-        for data in data_loader:
-            inputs = data["image"]
-            inputs = inputs.to(device)
-            targets = data["digit"]
-
-            outputs = model(inputs)
-            outputs = outputs.detach().cpu().numpy().tolist()
-            targets = targets.numpy().tolist()
-            final_outputs.extend(outputs)
-            final_targets.extend(targets)
-
-    return final_outputs, final_targets
-
-
-def infer(data_loader, model, device):
     model.eval()
 
-    final_outputs = []
-    for data in data_loader:
-        images = data["image"]
-        images = images.to(device)
+    with torch.no_grad():
+        for data in data_loader:
+            # Get image batch
+            inputs = data["image"]
+            inputs = inputs.to(device)
 
-        outputs = model(images)
-        outputs = outputs.detach().cpu().numpy().tolist()
-        final_outputs.extend(outputs)
+            # Get outputs from model
+            outputs = model(inputs)
+            outputs = outputs.detach().cpu().numpy().tolist()
+            final_outputs.extend(outputs)
 
-    return final_outputs
+            # Get target for cross-validation metrics
+            if target:
+                targets = data["digit"]
+                targets = targets.numpy().tolist()
+                final_targets.extend(targets)
 
+    # Return outputs (and targets) as numpy arrays
+    final_outputs = np.array(final_outputs)
 
-def inferTTA(df, model, device, augs, n_tta=4):
-    test_dataset = dataset.EMNISTTestDataset(df, augs)
-
-    preds_tta = np.zeros(len(df), 10)
-    for _ in range(n_tta):
-        test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.TEST_BATCH_SIZE)
-        preds = infer(test_loader, model, device)
-        preds = np.array(preds)
-        preds_tta += preds
-
-    return preds_tta
+    if target:
+        final_targets = np.array(final_targets)
+        return final_outputs, final_targets
+    else:
+        return final_outputs
