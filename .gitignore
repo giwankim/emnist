@@ -3,6 +3,9 @@
 *.pt
 *.bin
 *.zip
+*.log
+*.npy
+*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
