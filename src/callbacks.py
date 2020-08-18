@@ -8,7 +8,7 @@ class EarlyStopping:
         self.patience = patience
         self.mode = mode
         self.epsilon = epsilon
-    
+
         # Scores
         self.best_score = None
         self.counter = 0
@@ -22,7 +22,7 @@ class EarlyStopping:
         if self.mode == "max":
             score = epoch_score
         else:
-            score = -1. * epoch_score
+            score = -1.0 * epoch_score
 
         if self.best_score is None:
             self.best_score = score
@@ -39,6 +39,8 @@ class EarlyStopping:
 
     def save_checkpoint(self, epoch_score, model, model_path):
         if epoch_score not in (np.inf, -np.inf, np.nan, -np.nan):
-            print(f"Validation score improved ({self.val_score} -> {epoch_score}). Saving model...")
-            torch.save(model.state_dict, model_path)
+            print(
+                f"Validation score improved ({self.val_score} -> {epoch_score}). Saving model..."
+            )
+            torch.save(model.state_dict(), model_path)
         self.val_score = epoch_score
