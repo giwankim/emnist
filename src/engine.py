@@ -8,7 +8,7 @@ def loss_fn(outputs, targets):
     return F.cross_entropy(outputs, targets)
 
 
-def train(data_loader, model, optimizer, device, scheduler=None, scaler=None):
+def train(data_loader, model, optimizer, device, scheduler=None, scaler=None, swa=False):
     "Runs through an epoch of model training"
     model.train()
 
@@ -16,8 +16,11 @@ def train(data_loader, model, optimizer, device, scheduler=None, scaler=None):
         optimizer.zero_grad()
 
         with torch.cuda.amp.autocast():
-            inputs = data["image"].to(device)
-            digits = data["digit"].to(device)
+            inputs, digits, _ = data
+            # inputs = data["image"].to(device)
+            # digits = data["digit"].to(device)
+            inputs = inputs.to(device)
+            digits = digits.to(device)
             outputs = model(inputs)
             loss = loss_fn(outputs, digits)
 
@@ -47,7 +50,8 @@ def evaluate(data_loader, model, device, target=True):
     with torch.no_grad():
         for data in data_loader:
             # Get image batch
-            inputs = data["image"]
+            # inputs = data["image"]
+            inputs, targets, _ = data
             inputs = inputs.to(device)
 
             # Get outputs from model
@@ -57,8 +61,8 @@ def evaluate(data_loader, model, device, target=True):
 
             # Get target for cross-validation metrics
             if target:
-                targets = data["digit"]
-                targets = targets.numpy().tolist()
+                # targets = data["digit"]
+                targets = targets.detach().cpu().numpy().tolist()
                 final_targets.extend(targets)
 
     # Return outputs (and targets) as numpy arrays

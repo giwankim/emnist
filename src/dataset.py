@@ -20,7 +20,7 @@ class EMNISTDataset(torch.utils.data.Dataset):
 
         if augs is None:
             self.augs = A.Compose([
-                A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
+                    A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True,),
             ])
         else:
             self.augs = augs
@@ -46,33 +46,12 @@ class EMNISTDataset(torch.utils.data.Dataset):
             letter = self.letters[index]
             digit = torch.tensor(digit, dtype=torch.long)
             letter = torch.tensor(letter, dtype=torch.long)
-            return {"image": image, "digit": digit, "letter": letter,}
+            return image, digit, letter
+            # return {
+            #     "image": image,
+            #     "digit": digit,
+            #     "letter": letter,
+            # }
         else:
-            return {"image": image}
-
-
-# class EMNISTTestDataset(torch.utils.data.Dataset):
-#     def __init__(self, df, augs=None):
-#         self.images = df[config.PIXEL_COLS].values
-#         if augs is None:
-#             self.augs = A.Compose([
-#                 A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True),
-#             ])
-#         else:
-#             self.augs = augs
-
-#     def __len__(self):
-#         return len(self.images)
-
-#     def __getitem__(self, item):
-#         image = self.images[item]
-#         image = image.reshape(28, 28, 1)
-#         image = image.astype(np.uint8)
-
-#         augmented = self.augs(image=image)
-#         image = augmented["image"]
-
-#         image = torch.tensor(image, dtype=torch.float)
-#         image = image.permute(2, 0, 1)
-
-#         return {"image": image}
+            # return {"image": image}
+            return image
