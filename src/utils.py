@@ -12,3 +12,9 @@ def seed_everything(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
+
+
+def onehot(target, num_classes):
+    ohe_target = torch.zeros(num_classes, dtype=torch.float)
+    ohe_target[target] = 1.0
+    return ohe_target
