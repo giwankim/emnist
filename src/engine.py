@@ -5,10 +5,13 @@ import config
 
 
 def loss_fn(outputs, targets):
-    return F.cross_entropy(outputs, targets)
+    if len(targets.shape) == 1:
+        return F.cross_entropy(outputs, targets)
+    else:
+        return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def train(data_loader, model, optimizer, device, scheduler=None, scaler=None, swa=False):
+def train(data_loader, model, optimizer, device, scheduler=None, scaler=None):
     "Runs through an epoch of model training"
     model.train()
 
@@ -16,13 +19,16 @@ def train(data_loader, model, optimizer, device, scheduler=None, scaler=None, sw
         optimizer.zero_grad()
 
         with torch.cuda.amp.autocast():
-            inputs, digits, _ = data
-            # inputs = data["image"].to(device)
-            # digits = data["digit"].to(device)
+            # Get data batch
+            inputs, targets = data
             inputs = inputs.to(device)
-            digits = digits.to(device)
+            targets = targets.to(device)
+
+            # Forward pass
             outputs = model(inputs)
-            loss = loss_fn(outputs, digits)
+
+            # Cross entropy loss
+            loss = loss_fn(outputs, targets)
 
         if scaler is not None:
             scaler.scale(loss).backward()
@@ -49,9 +55,12 @@ def evaluate(data_loader, model, device, target=True):
 
     with torch.no_grad():
         for data in data_loader:
+
             # Get image batch
-            # inputs = data["image"]
-            inputs, targets, _ = data
+            if target:
+                inputs, targets = data
+            else:
+                inputs = data
             inputs = inputs.to(device)
 
             # Get outputs from model
@@ -61,7 +70,6 @@ def evaluate(data_loader, model, device, target=True):
 
             # Get target for cross-validation metrics
             if target:
-                # targets = data["digit"]
                 targets = targets.detach().cpu().numpy().tolist()
                 final_targets.extend(targets)
 
