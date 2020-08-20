@@ -1,9 +1,12 @@
 import numpy as np
 import albumentations as A
+
 import torch
+import torch.nn.functional as F
 
 import config
 import dataset
+import utils
 
 
 class EMNISTDataset(torch.utils.data.Dataset):
@@ -16,12 +19,19 @@ class EMNISTDataset(torch.utils.data.Dataset):
 
         if label:
             self.digits = df.digit.values
-            self.letters = df.letter.map(config.LETTER_TO_INDEX).values
+            # self.letters = df.letter.map(config.LETTER_TO_INDEX).values
 
         if augs is None:
-            self.augs = A.Compose([
-                    A.Normalize(config.MEAN, config.STD, max_pixel_value=255.0, always_apply=True,),
-            ])
+            self.augs = A.Compose(
+                [
+                    A.Normalize(
+                        config.MEAN,
+                        config.STD,
+                        max_pixel_value=255.0,
+                        always_apply=True,
+                    ),
+                ]
+            )
         else:
             self.augs = augs
 
@@ -43,15 +53,48 @@ class EMNISTDataset(torch.utils.data.Dataset):
         # Get labels and return
         if self.label:
             digit = self.digits[index]
-            letter = self.letters[index]
             digit = torch.tensor(digit, dtype=torch.long)
-            letter = torch.tensor(letter, dtype=torch.long)
-            return image, digit, letter
-            # return {
-            #     "image": image,
-            #     "digit": digit,
-            #     "letter": letter,
-            # }
+            return image, digit
         else:
-            # return {"image": image}
             return image
+
+
+class Mixup(torch.utils.data.Dataset):
+    def __init__(
+        self, dataset, num_classes=config.NUM_CLASSES, num_mix=1, beta=1.0, prob=0.5
+    ):
+        self.dataset = dataset
+        self.num_classes = num_classes
+        self.num_mix = num_mix
+        self.beta = beta
+        self.prob = prob
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, item):
+        image, target = self.dataset[item]
+        # ohe_target = utils.onehot(target, self.num_classes)
+        ohe_target = F.one_hot(target, self.num_classes).type(torch.float)
+
+        for _ in range(self.num_mix):
+            r = np.random.random()
+            if r > self.prob:
+                continue
+
+            # Get mixup parameters
+            if self.beta > 0:
+                lam = np.random.beta(self.beta, self.beta)
+            else:
+                lam = 1.0
+            rand_index = np.random.choice(len(self))
+
+            image2, target2 = self.dataset[rand_index]
+            # ohe_target2 = utils.onehot(target2, self.num_classes)
+            ohe_target2 = F.one_hot(target2, self.num_classes).type(torch.float)
+
+            # Mixup
+            image = lam * image + (1 - lam) * image2
+            ohe_target = lam * ohe_target + (1 - lam) * ohe_target2
+
+        return image, ohe_target
