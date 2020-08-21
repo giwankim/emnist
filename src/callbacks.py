@@ -11,6 +11,7 @@ class EarlyStopping:
 
         # Scores
         self.best_score = None
+        self.best_epoch = None
         self.counter = 0
         self.early_stop = False
         if self.mode == "max":
@@ -18,7 +19,7 @@ class EarlyStopping:
         else:
             self.val_score = np.inf
 
-    def __call__(self, epoch_score, model, model_path):
+    def __call__(self, epoch, epoch_score, model, model_path):
         if self.mode == "max":
             score = epoch_score
         else:
@@ -26,6 +27,7 @@ class EarlyStopping:
 
         if self.best_score is None:
             self.best_score = score
+            self.best_epoch = epoch
             self.save_checkpoint(epoch_score, model, model_path)
         elif score < self.best_score + self.epsilon:
             self.counter += 1
@@ -34,6 +36,7 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
+            self.best_epoch = epoch
             self.counter = 0
             self.save_checkpoint(epoch_score, model, model_path)
 

@@ -11,39 +11,38 @@ def loss_fn(outputs, targets):
         return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def train(data_loader, model, optimizer, device, scheduler=None, scaler=None):
-    "Runs through an epoch of model training"
+def train(data_loader, model, optimizer, device, scaler, clip_grad=True):
+    "Runs an epoch of model training"
     model.train()
-
     for data in data_loader:
+
         optimizer.zero_grad()
 
+        # Get data batch
+        inputs, targets = data
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        # FORWARD PASS
+
         with torch.cuda.amp.autocast():
-            # Get data batch
-            inputs, targets = data
-            inputs = inputs.to(device)
-            targets = targets.to(device)
-
-            # Forward pass
             outputs = model(inputs)
-
-            # Cross entropy loss
             loss = loss_fn(outputs, targets)
 
-        if scaler is not None:
-            scaler.scale(loss).backward()
+        # BACKWARD PASS
+
+        # Multiplies loss by scale factor before backward pass
+        scaler.scale(loss).backward()
+
+        if clip_grad:
+            # Gradient clipping with unscaled gradients
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.CLIP_GRAD)
-            scaler.step(optimizer)
-            scaler.update()
-        else:
-            loss.backward()
-            # Gradient clipping
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.CLIP_GRAD)
-            optimizer.step()
 
-        if scheduler is not None:
-            scheduler.step()
+        # Unscale gradients and calls `optimizer.step()`
+        scaler.step(optimizer)
+        # Updates the scaler's scale factor
+        scaler.update()
 
 
 def evaluate(data_loader, model, device, target=True):

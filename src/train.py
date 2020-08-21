@@ -22,35 +22,39 @@ import model_dispatcher
 
 
 def run(df, fold, train_idx, valid_idx, model, device):
-    # Get torch dataset
+    # DATASETS
     # train_dataset = dataset.EMNISTDataset(df, train_idx, augs=augs)
     train_dataset = dataset.EMNISTDataset(df, train_idx)
+    # train_dataset = dataset.Mixup(train_dataset, num_mix=2)
+
     valid_dataset = dataset.EMNISTDataset(df, valid_idx)
 
     # Get dataloaders
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=config.TRAIN_BATCH_SIZE, shuffle=True
+        train_dataset, batch_size=config.TRAIN_BATCH_SIZE, shuffle=True, num_workers=4
     )
     valid_loader = torch.utils.data.DataLoader(
         valid_dataset, batch_size=config.TEST_BATCH_SIZE
     )
 
-    # Optimizer with Stochastic Weight Averaging
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    # optimizer = torchcontrib.optim.SWA(optimizer, swa_start=20, swa_freq=5, swa_lr=3e-3)
-    swa_scheduler = SWALR(
-        optimizer, anneal_strategy="cos", anneal_epochs=20, swa_lr=1e-3
-    )
-    # swa_model = AveragedModel(
-    #     model, avg_fn=lambda avg_param, param, num: 0.1 * avg_param + 0.9 * param
-    # )
-    swa_model = AveragedModel(model)
-    swa_start = 20
+    # Optimizer
+    optimizer = torch.optim.AdamW(model.parameters(), lr=1.9e-3)
 
-    # Learning rate scheduler
+    # STOCHASTIC WEIGHT AVERAGING
+    # optimizer = torchcontrib.optim.SWA(optimizer, swa_start=20, swa_freq=5, swa_lr=1e-3)
+    swa_start = 20
+    swa_scheduler = SWALR(
+        optimizer, anneal_strategy="cos", anneal_epochs=swa_start, swa_lr=9e-5
+    )
+    swa_model = AveragedModel(model)
+    swa_model.to(device)
+
+    # LEARNING RATE SCHEDULER
     # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     #     optimizer, mode="max", verbose=True, patience=config.LR_REDUCE_PATIENCE, factor=0.5,)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.EPOCHS)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=config.EPOCHS,
+    )
 
     # Early Stopping
     early_stop = callbacks.EarlyStopping(
@@ -67,48 +71,46 @@ def run(df, fold, train_idx, valid_idx, model, device):
 
     # Run epochs
     for epoch in range(config.EPOCHS):
-
-        # train
+        # TRAIN FOR LOOP
         engine.train(train_loader, model, optimizer, device, scaler=scaler)
 
-        # validation
+        # VALIDATION
         preds, targs = engine.evaluate(valid_loader, model, device)
-        preds = np.array(preds)
         preds = np.argmax(preds, axis=1)
         val_accuracy = metrics.accuracy_score(targs, preds)
 
-        # Reduce LR if necessary
-        # scheduler.step(val_accuracy)
         # scheduler.step()
-        swa_model.train()
         if epoch > swa_start:
             swa_model.update_parameters(model)
+            swa_scheduler.step()
         else:
             # scheduler.step(val_accuracy)
             scheduler.step()
 
         # early stopping if necessary
-        early_stop(val_accuracy, model, model_path)
+        early_stop(epoch, val_accuracy, model, model_path)
         if early_stop.early_stop:
             print(
-                f"Early stopping. Best score={early_stop.best_score}. Loading weights..."
+                f"Early stopping. Best score={early_stop.best_score} at epoch {early_stop.best_epoch}. Loading weights..."
             )
             model.load_state_dict(torch.load(model_path))
             break
+
+    # UPDATE BATCH NORMALIZATION STATISTICS
 
     # Set the weights of the model to their SWA averages
     # optimizer.swap_swa_sgd()
     # torch.save(model.state_dict(), model_path)
 
-    # UPDATE BATCH NORMALIZATION STATISTICS
+    # valid_preds = engine.evaluate(valid_loader, model, device, target=False)
+
     swa_model = swa_model.cpu()
     torch.optim.swa_utils.update_bn(train_loader, swa_model)
-
     torch.save(swa_model.state_dict(), model_path)
     swa_model.to(device)
-    valid_preds = engine.evaluate(valid_loader, swa_model, device, target=False)
 
-    # valid_preds = engine.evaluate(valid_loader, model, device, target=False)
+    valid_preds, valid_targs = engine.evaluate(valid_loader, swa_model, device)
+    valid_accuracy = metrics.accuracy_score(valid_targs, np.argmax(valid_preds, axis=1))
 
     return valid_preds
 
@@ -156,3 +158,5 @@ if __name__ == "__main__":
     oofb = np.argmax(oof, axis=1)
     accuracy = metrics.accuracy_score(df.digit.values, oofb)
     print(f"CV accuracy score={accuracy:.5f}")
+
+    print(metrics.confusion_matrix(df.digit.values, oofb))
