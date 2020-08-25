@@ -1,11 +1,13 @@
 .vscode/
 *.csv
 *.pt
+*.pth
 *.bin
 *.zip
 *.log
 *.npy
 *.txt
+src/EfficientNet-PyTorch
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
