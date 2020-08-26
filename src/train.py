@@ -10,7 +10,7 @@ from sklearn import model_selection
 
 import torch
 import torchcontrib
-from torch.optim.swa_utils import AveragedModel, SWALR
+from torch.optim.swa_utils import AveragedModel, SWALR, update_bn
 
 import callbacks
 import config
@@ -23,10 +23,7 @@ import model_dispatcher
 
 def run(df, fold, train_idx, valid_idx, model, device):
     # DATASETS
-    # train_dataset = dataset.EMNISTDataset(df, train_idx, augs=augs)
     train_dataset = dataset.EMNISTDataset(df, train_idx)
-    # train_dataset = dataset.Mixup(train_dataset, num_mix=2)
-
     valid_dataset = dataset.EMNISTDataset(df, valid_idx)
 
     # Get dataloaders
@@ -97,17 +94,11 @@ def run(df, fold, train_idx, valid_idx, model, device):
             break
 
     # UPDATE BATCH NORMALIZATION STATISTICS
-
-    # Set the weights of the model to their SWA averages
-    # optimizer.swap_swa_sgd()
-    # torch.save(model.state_dict(), model_path)
-
-    # valid_preds = engine.evaluate(valid_loader, model, device, target=False)
-
     swa_model = swa_model.cpu()
-    torch.optim.swa_utils.update_bn(train_loader, swa_model)
-    torch.save(swa_model.state_dict(), model_path)
+    update_bn(train_loader, swa_model)
     swa_model.to(device)
+
+    torch.save(swa_model.state_dict(), model_path)
 
     valid_preds, valid_targs = engine.evaluate(valid_loader, swa_model, device)
     valid_accuracy = metrics.accuracy_score(valid_targs, np.argmax(valid_preds, axis=1))

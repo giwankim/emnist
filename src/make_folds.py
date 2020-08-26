@@ -28,11 +28,11 @@ def make_folds(df, dir_path):
 if __name__ == "__main__":
     # CLI ARGUMENTS
     parser = argparse.ArgumentParser(description="Make kfolds of dataframe")
-    parser.add_argument("--dataframe", type=str, default=config.TRAIN_CSV)
+    parser.add_argument("--data", type=str, default=config.TRAIN_CSV)
     parser.add_argument("--path", type=str, default="../input/folds/")
     args = parser.parse_args()
 
     # Get dataframe
-    df = pd.read_csv(args.dataframe)
+    df = pd.read_csv(args.data)
     # Make folds
     make_folds(df, args.path)

@@ -11,7 +11,7 @@ def loss_fn(outputs, targets):
         return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def train(data_loader, model, optimizer, device, scaler, clip_grad=True):
+def train(data_loader, model, optimizer, device, scaler, clip_grad=False):
     "Runs an epoch of model training"
     model.train()
     for data in data_loader:
@@ -24,13 +24,11 @@ def train(data_loader, model, optimizer, device, scaler, clip_grad=True):
         targets = targets.to(device)
 
         # FORWARD PASS
-
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
             loss = loss_fn(outputs, targets)
 
         # BACKWARD PASS
-
         # Multiplies loss by scale factor before backward pass
         scaler.scale(loss).backward()
 
