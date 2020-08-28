@@ -1,3 +1,5 @@
+import os
+import shutil
 import random
 import numpy as np
 import tensorflow as tf
@@ -38,9 +40,8 @@ def init_params(net):
                 init.constant(m.bias, 0)
 
 
-def save_checkpoint(
-    state, is_best, checkpoint="checkpoint", filename="checkpoint.pth.tar"
-):
+def save_checkpoint(state, is_best, checkpoint="checkpoint", filename="checkpoint.pth.tar"):
+    filepath = os.path.join(checkpoint, filename)
     pass
 
 
@@ -60,6 +61,6 @@ class AverageMeter:
 
     def update(self, val, n=1):
         self.val = val
-        self.sum = val * n
+        self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
