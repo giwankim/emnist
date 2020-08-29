@@ -1,7 +1,9 @@
 import numpy as np
+from sklearn import metrics
 import torch
 import torch.nn.functional as F
 import config
+from utils import AverageMeter
 
 
 def loss_fn(outputs, targets):
@@ -11,36 +13,46 @@ def loss_fn(outputs, targets):
         return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def train(data_loader, model, optimizer, device, scaler, clip_grad=False):
+def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_grad=False):
     "Runs an epoch of model training"
+    losses = AverageMeter()
+    accuracies = AverageMeter()
+
     model.train()
     for data in data_loader:
 
         optimizer.zero_grad()
 
-        # Get data batch
+        # Get data
         inputs, targets = data
         inputs = inputs.to(device)
         targets = targets.to(device)
 
-        # FORWARD PASS
+        # Forward pass
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
             loss = loss_fn(outputs, targets)
 
-        # BACKWARD PASS
-        # Multiplies loss by scale factor before backward pass
-        scaler.scale(loss).backward()
+        # Record training loss and accuracy
+        losses.update(loss.item(), len(inputs))
+        probs = outputs.detach().cpu().numpy()
+        preds = np.argmax(probs, axis=1)
+        targs = targets.detach().cpu().numpy()
+        accuracy = metrics.accuracy_score(targs, preds)
+        accuracies.update(accuracy, len(inputs))
 
+        # Backward pass
+        scaler.scale(loss).backward()
         if clip_grad:
-            # Gradient clipping with unscaled gradients
             scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), config.CLIP_GRAD)
-
-        # Unscale gradients and calls `optimizer.step()`
         scaler.step(optimizer)
-        # Updates the scaler's scale factor
         scaler.update()
+
+        if scheduler is not None:
+            scheduler.step()
+
+    return losses.avg, accuracies.avg
 
 
 def evaluate(data_loader, model, device, target=True):
