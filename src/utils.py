@@ -1,11 +1,11 @@
 import os
-import shutil
 import random
+import shutil
+
 import numpy as np
 import tensorflow as tf
 import torch
 import torch.nn as nn
-import torch.nn.init as init
 
 
 def seed_everything(seed):
@@ -18,31 +18,11 @@ def seed_everything(seed):
         torch.backends.cudnn.deterministic = True
 
 
-def onehot(target, num_classes):
-    ohe_target = torch.zeros(num_classes, dtype=torch.float)
-    ohe_target[target] = 1.0
-    return ohe_target
-
-
-def init_params(net):
-    """Init layer parameters."""
-    for m in net.modules():
-        if isinstance(m, nn.Conv2d):
-            init.kaiming_normal(m.weight, mode="fan_out")
-            if m.bias:
-                init.constant(m.bias, 0)
-        elif isinstance(m, nn.BatchNorm2d):
-            init.constant(m.weight, 1)
-            init.constant(m.bias, 0)
-        elif isinstance(m, nn.Linear):
-            init.normal(m.weight, std=1e-3)
-            if m.bias:
-                init.constant(m.bias, 0)
-
-
-def save_checkpoint(state, is_best, checkpoint="checkpoint", filename="checkpoint.pth.tar"):
+def save_checkpoint(state, is_best, checkpoint="checkpoint", filename="checkpoint.pth"):
     filepath = os.path.join(checkpoint, filename)
-    pass
+    torch.save(state, filepath)
+    if is_best:
+        shutil.copyfile(filepath, os.apth.join(checkpoint, "model_best.pth"))
 
 
 class AverageMeter:
