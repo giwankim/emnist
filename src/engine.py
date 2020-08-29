@@ -13,8 +13,17 @@ def loss_fn(outputs, targets):
         return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_grad=False):
+def label_smoothing_loss_fn(outputs, targets, epsilon=0.1):
+    num_classes = outputs.shape[1]
+    device = outputs.device
+    onehot = F.one_hot(targets, num_classes).to(dtype=torch.float, device=device)
+    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(device) * epsilon / num_classes
+    return loss_fn(outputs, targets)
+
+
+def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_grad=False, label_smooth=False,):
     "Runs an epoch of model training"
+
     losses = AverageMeter()
     accuracies = AverageMeter()
 
@@ -31,7 +40,10 @@ def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_gr
         # Forward pass
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
-            loss = loss_fn(outputs, targets)
+            if label_smooth:
+                loss = label_smoothing_loss_fn(outputs, targets)
+            else:
+                loss = loss_fn(outputs, targets)
 
         # Record training loss and accuracy
         losses.update(loss.item(), len(inputs))
@@ -59,6 +71,7 @@ def evaluate(data_loader, model, device, target=True):
     "Run evaluation loop"
     final_outputs = []
     final_targets = []
+    losses = AverageMeter()
 
     model.eval()
 

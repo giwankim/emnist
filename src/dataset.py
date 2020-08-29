@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import config
 import dataset
 import utils
+from config import (PIXEL_COLS, SIZE, MEAN, STD, NUM_CLASSES, NUM_FOLDS)
 
 
 class EMNISTDataset(torch.utils.data.Dataset):
@@ -15,9 +16,9 @@ class EMNISTDataset(torch.utils.data.Dataset):
         self.label = label
         self.rgb = rgb
 
-        self.images = df[config.PIXEL_COLS].values
+        self.images = df[PIXEL_COLS].values
         self.images = self.images.astype(np.uint8)
-        self.images = self.images.reshape(-1, config.SIZE, config.SIZE, 1)
+        self.images = self.images.reshape(-1, SIZE, SIZE, 1)
 
         if label:
             self.digits = df.digit.values
@@ -26,23 +27,14 @@ class EMNISTDataset(torch.utils.data.Dataset):
             if self.rgb:
                 self.augs = A.Compose(
                     [
-                        A.Normalize(
-                            mean=[0.485, 0.456, 0.406],
-                            std=[0.229, 0.224, 0.225],
-                            max_pixel_value=255.0,
-                            always_apply=True,
-                        ),
+                        # A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225], max_pixel_value=255.0, always_apply=True,),
+                        A.Normalize(mean=[MEAN, MEAN, MEAN], std=[STD, STD, STD], max_pixel_value=255.0, always_apply=True),
                     ]
                 )
             else:
                 self.augs = A.Compose(
                     [
-                        A.Normalize(
-                            config.MEAN,
-                            config.STD,
-                            max_pixel_value=255.0,
-                            always_apply=True,
-                        ),
+                        A.Normalize(MEAN, STD, max_pixel_value=255.0, always_apply=True,),
                     ]
                 )
         else:
@@ -76,7 +68,7 @@ class EMNISTDataset(torch.utils.data.Dataset):
 
 class Mixup(torch.utils.data.Dataset):
     def __init__(
-        self, dataset, num_classes=config.NUM_CLASSES, num_mix=1, beta=1.0, prob=0.5
+        self, dataset, num_classes=NUM_CLASSES, num_mix=1, beta=1.0, prob=0.5
     ):
         self.dataset = dataset
         self.num_classes = num_classes
@@ -89,7 +81,6 @@ class Mixup(torch.utils.data.Dataset):
 
     def __getitem__(self, item):
         image, target = self.dataset[item]
-        # ohe_target = utils.onehot(target, self.num_classes)
         ohe_target = F.one_hot(target, self.num_classes).type(torch.float)
 
         for _ in range(self.num_mix):
