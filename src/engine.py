@@ -23,7 +23,6 @@ def label_smoothing_loss_fn(outputs, targets, epsilon=0.1):
 
 def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_grad=False, label_smooth=False,):
     "Runs an epoch of model training"
-
     losses = AverageMeter()
     accuracies = AverageMeter()
 
@@ -74,32 +73,31 @@ def evaluate(data_loader, model, device, target=True):
     losses = AverageMeter()
 
     model.eval()
-
     with torch.no_grad():
         for data in data_loader:
 
             # Get image batch
             if target:
                 inputs, targets = data
+                targets = targets.to(device)
             else:
                 inputs = data
             inputs = inputs.to(device)
 
-            # Get outputs from model
+            # Forward pass
             outputs = model(inputs)
+            if target:
+                loss = loss_fn(outputs, targets)
+                losses.update(loss.item(), len(outputs))
+                targets = targets.detach().cpu().numpy().tolist()
+                final_targets.extend(targets)
             outputs = outputs.detach().cpu().numpy().tolist()
             final_outputs.extend(outputs)
 
-            # Get target for cross-validation metrics
-            if target:
-                targets = targets.detach().cpu().numpy().tolist()
-                final_targets.extend(targets)
-
     # Return outputs (and targets) as numpy arrays
     final_outputs = np.array(final_outputs)
-
     if target:
         final_targets = np.array(final_targets)
-        return final_outputs, final_targets
+        return final_outputs, final_targets, losses.avg
     else:
         return final_outputs
