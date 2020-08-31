@@ -324,12 +324,6 @@ def EfficientNetB0():
     return EfficientNet(cfg)
 
 
-import math
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-
 class BasicBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, dropRate=0.0):
         super(BasicBlock, self).__init__()

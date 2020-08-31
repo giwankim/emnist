@@ -25,7 +25,6 @@ def run(df, fold, train_idx, valid_idx, model, device):
     # DATASETS
     train_dataset = dataset.EMNISTDataset(df, train_idx)
     valid_dataset = dataset.EMNISTDataset(df, valid_idx)
-
     # Get dataloaders
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=config.TRAIN_BATCH_SIZE, shuffle=True, num_workers=4
@@ -34,37 +33,28 @@ def run(df, fold, train_idx, valid_idx, model, device):
         valid_dataset, batch_size=config.TEST_BATCH_SIZE
     )
 
-    # Optimizer
+    # Optimizer and Scheduler
     optimizer = torch.optim.AdamW(model.parameters(), lr=1.9e-3)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=config.EPOCHS,
+    )
+    early_stop = callbacks.EarlyStopping(
+        patience=config.EARLY_STOP_PATIENCE, mode="max"
+    )
+    # Gradient scaler for AMP
+    scaler = torch.cuda.amp.GradScaler()
+    # Model path
+    model_path = (
+        config.MODEL_PATH / f"{args.model}-fold{fold}-{config.MAJOR}-{config.MINOR}.pt"
+    )
 
     # STOCHASTIC WEIGHT AVERAGING
-    # optimizer = torchcontrib.optim.SWA(optimizer, swa_start=20, swa_freq=5, swa_lr=1e-3)
     swa_start = 20
     swa_scheduler = SWALR(
         optimizer, anneal_strategy="cos", anneal_epochs=swa_start, swa_lr=9e-5
     )
     swa_model = AveragedModel(model)
     swa_model.to(device)
-
-    # LEARNING RATE SCHEDULER
-    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #     optimizer, mode="max", verbose=True, patience=config.LR_REDUCE_PATIENCE, factor=0.5,)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, T_max=config.EPOCHS,
-    )
-
-    # Early Stopping
-    early_stop = callbacks.EarlyStopping(
-        patience=config.EARLY_STOP_PATIENCE, mode="max"
-    )
-
-    # Gradient scaler for AMP
-    scaler = torch.cuda.amp.GradScaler()
-
-    # Model path
-    model_path = (
-        config.MODEL_PATH / f"{args.model}-fold{fold}-{config.MAJOR}-{config.MINOR}.pt"
-    )
 
     # Run epochs
     for epoch in range(config.EPOCHS):
@@ -76,7 +66,6 @@ def run(df, fold, train_idx, valid_idx, model, device):
         preds = np.argmax(preds, axis=1)
         val_accuracy = metrics.accuracy_score(targs, preds)
 
-        # scheduler.step()
         if epoch > swa_start:
             swa_model.update_parameters(model)
             swa_scheduler.step()
