@@ -184,7 +184,7 @@ def EfficientNetB2():
 def EfficientNetB3():
     model = EfficientNet.from_name("efficientnet-b3", image_size=28, num_classes=10)
     model._conv_stem = Conv2dStaticSamePadding(
-        3, 32, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
+        3, 40, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
     )
     return model
 
@@ -200,7 +200,7 @@ def EfficientNetB4():
 def EfficientNetB5():
     model = EfficientNet.from_name("efficientnet-b5", image_size=28, num_classes=10)
     model._conv_stem = Conv2dStaticSamePadding(
-        3, 32, kernel_size=3, stride=1, bias=False, image_size=(28, 28)
+        3, 48, kernel_size=3, stride=1, bias=False, image_size=(28, 28)
     )
     return model
 
@@ -216,7 +216,7 @@ def EfficientNetB6():
 def EfficientNetB7():
     model = EfficientNet.from_name("efficientnet-b7", image_size=28, num_classes=10)
     model._conv_stem = Conv2dStaticSamePadding(
-        3, 56, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
+        3, 64, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
     )
     return model
 
@@ -224,7 +224,7 @@ def EfficientNetB7():
 def EfficientNetB8():
     model = EfficientNet.from_name("efficientnet-b8", image_size=28, num_classes=10)
     model._conv_stem = Conv2dStaticSamePadding(
-        3, 56, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
+        3, 72, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
     )
     return model
 
@@ -232,7 +232,6 @@ def EfficientNetB8():
 def EfficientNetL2():
     model = EfficientNet.from_name("efficientnet-l2", image_size=28, num_classes=10)
     model._conv_stem = Conv2dStaticSamePadding(
-        3, 56, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
+        3, 136, kernel_size=(3, 3), stride=(1, 1), bias=False, image_size=(28, 28)
     )
     return model
-
