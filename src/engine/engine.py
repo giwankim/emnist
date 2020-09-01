@@ -1,9 +1,11 @@
 import numpy as np
 from sklearn import metrics
+
 import torch
 import torch.nn.functional as F
+
 import config
-from utils import AverageMeter
+import utils
 
 
 def loss_fn(outputs, targets):
@@ -21,10 +23,19 @@ def label_smoothing_loss_fn(outputs, targets, epsilon=0.1):
     return loss_fn(outputs, targets)
 
 
-def train(data_loader, model, optimizer, device, scaler, scheduler=None, clip_grad=False, label_smooth=False,):
+def train(
+    data_loader,
+    model,
+    optimizer,
+    device,
+    scaler,
+    scheduler=None,
+    clip_grad=False,
+    label_smooth=False,
+):
     "Runs an epoch of model training"
-    losses = AverageMeter()
-    accuracies = AverageMeter()
+    losses = utils.AverageMeter()
+    accuracies = utils.AverageMeter()
 
     model.train()
     for data in data_loader:
@@ -70,7 +81,7 @@ def evaluate(data_loader, model, device, target=True):
     "Run evaluation loop"
     final_outputs = []
     final_targets = []
-    losses = AverageMeter()
+    losses = utils.AverageMeter()
 
     model.eval()
     with torch.no_grad():
