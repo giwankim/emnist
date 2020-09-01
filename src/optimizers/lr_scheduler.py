@@ -7,7 +7,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
 
-class LinearWarmupCosineAnnelingLR(_LRScheduler):
+class LinearWarmupCosineAnnealingLR(_LRScheduler):
     """
     Sets the learning rate of each parameter group to follow a linear warmup schedule
     between `warmup_start_lr` and `base_lr` followed by cosine annealing schedule between
@@ -66,7 +66,7 @@ class LinearWarmupCosineAnnelingLR(_LRScheduler):
         self.warmup_start_lr = warmup_start_lr
         self.eta_min = eta_min
 
-        super(LinearWarmupCosineAnnelingLR, self).__init__(optimizer, last_epoch)
+        super(LinearWarmupCosineAnnealingLR, self).__init__(optimizer, last_epoch)
 
     def get_lr(self) -> List[float]:
         """
