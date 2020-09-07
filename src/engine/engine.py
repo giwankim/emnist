@@ -25,7 +25,9 @@ def label_smooth_loss_fn(outputs, targets, epsilon=0.1):
     return loss_fn(outputs, targets)
 
 
-def mixup_data(x, y, alpha=0.4):
+def mixup_data(x, y, alpha=0.4, p=0.5):
+    if np.random.random() > p:
+        return x, y, torch.zeros_like(y), 1.0
     lam = np.random.beta(alpha, alpha)
     bs = x.size(0)
     shuffle = torch.randperm(bs, device=x.device)
