@@ -15,12 +15,23 @@ def loss_fn(outputs, targets):
         return torch.mean(torch.sum(-targets * F.log_softmax(outputs, dim=1), dim=1))
 
 
-def label_smoothing_loss_fn(outputs, targets, epsilon=0.1):
+def label_smooth_loss_fn(outputs, targets, epsilon=0.1):
     num_classes = outputs.shape[1]
     device = outputs.device
     onehot = F.one_hot(targets, num_classes).to(dtype=torch.float, device=device)
-    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(device) * epsilon / num_classes
+    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(
+        device
+    ) * epsilon / num_classes
     return loss_fn(outputs, targets)
+
+
+def mixup_data(x, y, alpha=0.4):
+    lam = np.random.beta(alpha, alpha)
+    bs = x.size(0)
+    shuffle = torch.randperm(bs, device=x.device)
+    mixed_x = lam * x + (1 - lam) * x[shuffle]
+    y_a, y_b = y, y[shuffle]
+    return mixed_x, y_a, y_b, lam
 
 
 def train(
@@ -32,36 +43,38 @@ def train(
     scheduler=None,
     clip_grad=False,
     label_smooth=False,
+    mixup=False,
 ):
     "Runs an epoch of model training"
-    losses = utils.AverageMeter()
-    accuracies = utils.AverageMeter()
+    correct = 0
+    total = 0
+    total_loss = 0
 
     model.train()
     for data in data_loader:
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
+        for param in model.parameters():
+            param.grad = None
 
         # Get data
         inputs, targets = data
         inputs = inputs.to(device)
         targets = targets.to(device)
 
+        if mixup:
+            inputs, targets_a, targets_b, lam = mixup_data(inputs, targets)
+
         # Forward pass
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
-            if label_smooth:
-                loss = label_smoothing_loss_fn(outputs, targets)
+            criterion = label_smooth_loss_fn if label_smooth else loss_fn
+            if mixup:
+                loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(
+                    outputs, targets_b
+                )
             else:
-                loss = loss_fn(outputs, targets)
-
-        # Record training loss and accuracy
-        losses.update(loss.item(), len(inputs))
-        probs = outputs.detach().cpu().numpy()
-        preds = np.argmax(probs, axis=1)
-        targs = targets.detach().cpu().numpy()
-        accuracy = metrics.accuracy_score(targs, preds)
-        accuracies.update(accuracy, len(inputs))
+                loss = criterion(outputs, targets)
 
         # Backward pass
         scaler.scale(loss).backward()
@@ -71,44 +84,60 @@ def train(
         scaler.step(optimizer)
         scaler.update()
 
+        # Update scheduler
         if scheduler is not None:
             scheduler.step()
 
-    return losses.avg, accuracies.avg
+        # Record metrics
+        preds = torch.argmax(outputs, dim=1)
+        if mixup:
+            correct += (lam * preds.eq(targets_a).cpu().sum().float()) + (
+                (1 - lam) * preds.eq(targets_b).cpu().sum().float()
+            )
+        else:
+            correct += preds.eq(targets).cpu().sum().float()
+        total += targets.size(0)
+        total_loss += loss.item() * len(inputs)
+
+    return total_loss / total, correct / total
 
 
-def evaluate(data_loader, model, device, target=True):
+def evaluate(data_loader, model, device, test=False):
     "Run evaluation loop"
     final_outputs = []
     final_targets = []
-    losses = utils.AverageMeter()
+    total_loss = 0
+    total = 0
+    correct = 0
 
     model.eval()
     with torch.no_grad():
         for data in data_loader:
 
             # Get image batch
-            if target:
+            if test:
+                intputs = data
+            else:
                 inputs, targets = data
                 targets = targets.to(device)
-            else:
-                inputs = data
             inputs = inputs.to(device)
 
             # Forward pass
             outputs = model(inputs)
-            if target:
-                loss = loss_fn(outputs, targets)
-                losses.update(loss.item(), len(outputs))
-                targets = targets.detach().cpu().numpy().tolist()
-                final_targets.extend(targets)
-            outputs = outputs.detach().cpu().numpy().tolist()
-            final_outputs.extend(outputs)
 
-    # Return outputs (and targets) as numpy arrays
-    final_outputs = np.array(final_outputs)
-    if target:
-        final_targets = np.array(final_targets)
-        return final_outputs, final_targets, losses.avg
-    else:
+            final_outputs.append(outputs.detach().cpu().numpy())
+            if not test:
+                final_targets.append(targets.detach().cpu().numpy())
+                loss = loss_fn(outputs, targets)
+                preds = torch.argmax(outputs, dim=1)
+                total_loss += loss.item() * targets.size(0)
+                total += targets.size(0)
+                correct += preds.eq(targets).cpu().sum().float()
+
+    final_outputs = np.concatenate(final_outputs, axis=0)
+    if test:
         return final_outputs
+    else:
+        final_targets = np.concatenate(final_targets, axis=0)
+        return final_outputs, final_targets, total_loss / total, correct / total
+
