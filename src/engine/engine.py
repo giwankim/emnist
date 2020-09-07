@@ -19,9 +19,7 @@ def label_smooth_loss_fn(outputs, targets, epsilon=0.1):
     num_classes = outputs.shape[1]
     device = outputs.device
     onehot = F.one_hot(targets, num_classes).to(dtype=torch.float, device=device)
-    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(
-        device
-    ) * epsilon / num_classes
+    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(device) * epsilon / num_classes
     return loss_fn(outputs, targets)
 
 
@@ -29,11 +27,42 @@ def mixup_data(x, y, alpha=0.4, p=0.5):
     if np.random.random() > p:
         return x, y, torch.zeros_like(y), 1.0
     lam = np.random.beta(alpha, alpha)
-    bs = x.size(0)
-    shuffle = torch.randperm(bs, device=x.device)
+    shuffle = torch.randperm(x.size(0), device=x.device)
     mixed_x = lam * x + (1 - lam) * x[shuffle]
     y_a, y_b = y, y[shuffle]
     return mixed_x, y_a, y_b, lam
+
+
+def rand_bbox(W, H, lam, device):
+    cut_rat = torch.sqrt(1.0 - lam)
+    cut_w = (W * cut_rat).type(torch.long)
+    cut_h = (H * cut_rat).type(torch.long)
+    # uniform
+    cx = torch.randint(W, (1,), device=device)
+    cy = torch.randint(H, (1,), device=device)
+    x1 = torch.clamp(cx - cut_w // 2, 0, W)
+    y1 = torch.clamp(cy - cut_h // 2, 0, H)
+    x2 = torch.clamp(cx + cut_w // 2, 0, W)
+    y2 = torch.clamp(cy + cut_h // 2, 0, H)
+    return x1, y1, x2, y2
+
+
+def cutmix_data(x, y, alpha=1.0, p=0.5):
+    if np.random.random() > p:
+        return x, y, torch.zeros_like(y), 1.0
+    W, H = x.size(2), x.size(3)
+    shuffle = torch.randperm(x.size(0), device=x.device)
+    cutmix_x = x[shuffle]
+
+    lam = torch.distributions.beta.Beta(alpha, alpha).sample().to(x.device)
+    # lam = torch.tensor(np.random.beta(alpha, alpha), device=x.device)
+    x1, y1, x2, y2 = rand_bbox(W, H, lam, x.device)
+    cutmix_x[:, :, x1:x2, y1:y2] = x[shuffle, :, x1:x2, y1:y2]
+
+    # Adjust lambda to match pixel ratio
+    lam = 1 - ((x2 - x1) * (y2 - y1) / float(W * H)).item()
+    y_a, y_b = y, y[shuffle]
+    return cutmix_x, y_a, y_b, lam
 
 
 def train(
@@ -46,6 +75,7 @@ def train(
     clip_grad=False,
     label_smooth=False,
     mixup=False,
+    cutmix=False,
 ):
     "Runs an epoch of model training"
     correct = 0
@@ -66,12 +96,14 @@ def train(
 
         if mixup:
             inputs, targets_a, targets_b, lam = mixup_data(inputs, targets)
+        elif cutmix:
+            inputs, targets_a, targets_b, lam = cutmix_data(inputs, targets)
 
         # Forward pass
         with torch.cuda.amp.autocast():
             outputs = model(inputs)
             criterion = label_smooth_loss_fn if label_smooth else loss_fn
-            if mixup:
+            if cutmix or mixup:
                 loss = lam * criterion(outputs, targets_a) + (1 - lam) * criterion(
                     outputs, targets_b
                 )
@@ -92,7 +124,7 @@ def train(
 
         # Record metrics
         preds = torch.argmax(outputs, dim=1)
-        if mixup:
+        if cutmix or mixup:
             correct += (lam * preds.eq(targets_a).cpu().sum().float()) + (
                 (1 - lam) * preds.eq(targets_b).cpu().sum().float()
             )
