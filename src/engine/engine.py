@@ -150,7 +150,7 @@ def evaluate(data_loader, model, device, test=False):
 
             # Get image batch
             if test:
-                intputs = data
+                inputs = data
             else:
                 inputs, targets = data
                 targets = targets.to(device)
