@@ -1,1 +1,1 @@
-from .engine import train, evaluate
+from .engine import train, evaluate, infer

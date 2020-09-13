@@ -1,10 +1,13 @@
 import numpy as np
+import scipy
 from sklearn import metrics
 
 import torch
 import torch.nn.functional as F
 
 import config
+import dataset
+import models
 import utils
 
 
@@ -19,7 +22,9 @@ def label_smooth_loss_fn(outputs, targets, epsilon=0.1):
     num_classes = outputs.shape[1]
     device = outputs.device
     onehot = F.one_hot(targets, num_classes).to(dtype=torch.float, device=device)
-    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(device) * epsilon / num_classes
+    targets = (1 - epsilon) * onehot + torch.ones(onehot.shape).to(
+        device
+    ) * epsilon / num_classes
     return loss_fn(outputs, targets)
 
 
@@ -175,3 +180,60 @@ def evaluate(data_loader, model, device, test=False):
         final_targets = np.concatenate(final_targets, axis=0)
         return final_outputs, final_targets, total_loss / total, correct / total
 
+
+def get_tta(
+    model, test_df, augs, device, batch_size=1024, n=4, beta=0.25, use_max=False
+):
+    ds = dataset.EMNISTDataset(test_df, np.arange(len(test_df)), label=False)
+    dl = torch.utils.data.DataLoader(
+        ds, batch_size=batch_size, num_workers=4, pin_memory=True
+    )
+    logits = evaluate(dl, model, device, test=True)
+
+    aug_ds = dataset.EMNISTDataset(
+        test_df, np.arange(len(test_df)), augs=augs, label=False
+    )
+    aug_dl = torch.utils.data.DataLoader(
+        aug_ds, batch_size=batch_size, num_workers=4, pin_memory=True
+    )
+    aug_logits = [evaluate(aug_dl, model, device, test=True) for i in range(n)]
+    aug_logits = np.concatenate(aug_logits, axis=0)
+    aug_logits = aug_logits.max(axis=0) if use_max else aug_logits.mean(axis=0)
+
+    if use_max:
+        return np.concatenate([logits, aug_logits], axis=0).max(axis=0)
+    else:
+        return beta * aug_logits + (1 - beta) * logits
+
+
+def infer(
+    model_names,
+    checkpoints,
+    test_df,
+    augs=None,
+    batch_size=1024,
+    device=config.DEVICE,
+    tta=False,
+):
+    output = np.zeros((len(test_df), 10))
+
+    test_dataset = dataset.EMNISTDataset(
+        test_df, np.arange(len(test_df)), augs=augs, label=False
+    )
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=batch_size, num_workers=4, pin_memory=True
+    )
+
+    for model_name, checkpoint in zip(model_names, checkpoints):
+        model = models.get_model(model_name).to(device)
+        model.load_state_dict(torch.load(checkpoint))
+
+        if tta:
+            logits = get_tta(model, test_df, augs, device, batch_size)
+        else:
+            logits = evaluate(test_loader, model, device, test=True)
+
+        probs = scipy.special.softmax(logits, axis=1)
+        output += probs / len(model_names)
+
+    return output
