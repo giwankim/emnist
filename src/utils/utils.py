@@ -20,6 +20,15 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
 
 
+def init_cnn(m):
+    if getattr(m, "bias", None) is not None:
+        nn.init.constant_(m.bias, 0)
+    if isinstance(m, (nn.Conv2d, nn.Linear)):
+        nn.init.kaiming_normal_(m.weight)
+    for l in m.children():
+        init_cnn(l)
+
+
 def save_checkpoint(state, is_best, checkpoint="checkpoint", filename="checkpoint.pth"):
     filepath = os.path.join(checkpoint, filename)
     torch.save(state, filepath)
